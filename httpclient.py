@@ -22,8 +22,20 @@ import sys
 import socket
 import re
 # you may use urllib to encode data appropriately
-import urllib.parse
+from urllib.parse import urlparse, urlencode
 
+#-------------------------------------------------------------------------------------------#
+# Code References:
+#  - (parse_url) Python Docs urllib.parse, Date Accessed: Feb 10th, 2021
+# https://docs.python.org/3/library/urllib.parse.html#module-urllib.parse
+#
+#  - (lines 109, 125) Tutorials Point HTTP Requests, Date Accessed: Feb 10th, 2021
+# https://www.tutorialspoint.com/http/http_requests.htm#:~:text=An%20HTTP%20client%20sends%20an,end%20of%20the%20header%20fields
+#
+#  - (line 123) bgporter (Apr 9, 2011), mb21 (Nov 15, 2018), Date Accessed: Feb 10th, 2021
+# https://stackoverflow.com/questions/5607551/how-to-urlencode-a-querystring-in-python
+
+#-------------------------------------------------------------------------------------------#
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
 
@@ -41,13 +53,13 @@ class HTTPClient(object):
         return None
 
     def get_code(self, data):
-        return None
+        return int(data.split()[1])
 
     def get_headers(self,data):
         return None
 
     def get_body(self, data):
-        return None
+        return data.split('\r\n\r\n')[1]
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -67,14 +79,56 @@ class HTTPClient(object):
                 done = not part
         return buffer.decode('utf-8')
 
+    def parse_url(self, url):
+        parsedUrl = urlparse(url)
+        
+        self.host = parsedUrl.hostname
+        self.port = parsedUrl.port
+        self.path = parsedUrl.path
+
+        if self.port == None:
+            self.port = 80
+        
+        if self.path == '':
+            self.path = '/'
+
+
+    def send_request(self, request):
+        self.connect(self.host, self.port)
+        self.sendall(request)
+        response = self.recvall(self.socket)
+        self.close()
+
+        print(response)
+
+        return response
+
     def GET(self, url, args=None):
-        code = 500
-        body = ""
+        self.parse_url(url)
+
+        request = 'GET %s HTTP/1.1\r\nHost: %s\r\n\r\n' % (self.path, self.host)
+ 
+        response = self.send_request(request)
+        
+        code = self.get_code(response)
+        body = self.get_body(response)
+
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
+        self.parse_url(url)
+        body = ''
+
+        if args != None:
+            body = urlencode(args)
+        
+        request = 'POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %s\r\n\r\n%s' % (self.path, self.host, len(body), body)  
+
+        response = self.send_request(request)
+        
+        code = self.get_code(response)
+        body = self.get_body(response)
+
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
